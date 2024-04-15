@@ -18,4 +18,3 @@ class SingleGPU(nn.Module):
 
     def forward(self, input):
         return self.module(input.cuda(non_blocking=True))
-
