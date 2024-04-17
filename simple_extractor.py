@@ -1,16 +1,6 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-"""
-@Author  :   Peike Li
-@Contact :   peike.li@yahoo.com
-@File    :   simple_extractor.py
-@Time    :   8/30/19 8:59 PM
-@Desc    :   Simple Extractor
-@License :   This source code is licensed under the license found in the
-             LICENSE file in the root directory of this source tree.
-"""
-
 import os
 import torch
 import argparse
