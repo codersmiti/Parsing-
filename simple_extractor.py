@@ -81,27 +81,27 @@ def get_palette(num_cls):
 def main():
     args = get_arguments()
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # Safe device selection
+
     gpus = [int(i) for i in args.gpu.split(',')]
     assert len(gpus) == 1
     if not args.gpu == 'None':
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     num_classes = dataset_settings[args.dataset]['num_classes']
-    #num_classes = 14 for ACGPN
     input_size = dataset_settings[args.dataset]['input_size']
     label = dataset_settings[args.dataset]['label']
-    #print("Evaluating total class number {} with {}".format(num_classes, label))
 
     model = networks.init_model('resnet101', num_classes=num_classes, pretrained=None)
 
-    state_dict = torch.load(args.model_restore)['state_dict']
+    state_dict = torch.load(args.model_restore, map_location=device)['state_dict']
     from collections import OrderedDict
     new_state_dict = OrderedDict()
     for k, v in state_dict.items():
         name = k[7:]  # remove `module.`
         new_state_dict[name] = v
     model.load_state_dict(new_state_dict)
-    model.cuda()
+    model.to(device)  # <-- GPU/CPU adaptive
     model.eval()
 
     transform = transforms.Compose([
@@ -110,35 +110,37 @@ def main():
     ])
 
     trans_dict = {
-        0:0,
-        1:1, 2:1,
-        5:4, 6:4, 7:4, 
-        18:5,
-        19:6,
-        9:8, 12:8,
-        16:9,
-        17:10,
-        14:11,
-        4:12, 13:12,
-        15:13
+        0: 0,
+        1: 1, 2: 1,
+        5: 4, 6: 4, 7: 4,
+        18: 5,
+        19: 6,
+        9: 8, 12: 8,
+        16: 9,
+        17: 10,
+        14: 11,
+        4: 12, 13: 12,
+        15: 13
     }
+
     dataset = SimpleFolderDataset(root=args.input_dir, input_size=input_size, transform=transform)
     dataloader = DataLoader(dataset)
 
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 
-    #palette = get_palette(14)
     with torch.no_grad():
         for idx, batch in enumerate(tqdm(dataloader)):
             image, meta = batch
+            image = image.to(device)  # <-- GPU/CPU adaptive
+
             img_name = meta['name'][0]
             c = meta['center'].numpy()[0]
             s = meta['scale'].numpy()[0]
             w = meta['width'].numpy()[0]
             h = meta['height'].numpy()[0]
 
-            output = model(image.cuda())
+            output = model(image)
             upsample = torch.nn.Upsample(size=input_size, mode='bicubic', align_corners=True)
             upsample_output = upsample(output[0][-1][0].unsqueeze(0))
             upsample_output = upsample_output.squeeze()
@@ -153,11 +155,13 @@ def main():
             for old, new in trans_dict.items():
                 new_arr = np.where(output_arr == old, new, new_arr)
             output_img = Image.fromarray(np.asarray(new_arr, dtype=np.uint8))
-            #output_img.putpalette(palette)
             output_img.save(parsing_result_path)
+
             if args.logits:
                 logits_result_path = os.path.join(args.output_dir, img_name[:-4] + '.npy')
                 np.save(logits_result_path, logits_result)
+
+    
     return
 
 
